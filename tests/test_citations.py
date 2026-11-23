@@ -40,3 +40,20 @@ def test_parse_answer_types():
     assert parse_answer("Đáp án: (B)", "Trắc nghiệm") == "B"
     assert parse_answer("Đáp án: 10 ngày [Luật Trọng tài thương mại, Điều 30].", "Tự luận") == "10 ngày"
     assert parse_answer("không rõ", "Trắc nghiệm") == ""
+
+
+def test_token_f1_and_citation_scores():
+    from sarag.datasets import Question
+    from sarag.evaluation.qa import citation_scores, token_f1
+    assert token_f1("10 ngày", "10 ngày") == 1.0
+    assert token_f1("trong 10 ngày", "10 ngày") == 0.8
+    assert token_f1("", "x") == 0.0
+    q = Question("q", "?", gold_articles=[("Luật Viên chức", 0, "5")])
+    pred = {"citations": [
+        {"doc_id": "Luật Viên chức", "article": "5", "status": "valid"},
+        {"doc_id": "Luật Viên chức", "article": "6", "status": "not_in_context"},
+        {"doc_id": None, "article": "2", "status": "unknown_document"}]}
+    s = citation_scores(pred, q, verified=True)
+    assert (s["cit_precision"], s["cit_recall"], s["in_tree"], s["n_kept"]) == (1.0, 1.0, 2, 1)
+    s = citation_scores(pred, q, verified=False)
+    assert s["cit_precision"] == 0.5 and s["n_kept"] == 2
