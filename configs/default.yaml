@@ -26,6 +26,7 @@ datasets:                     # paths relative to paths.raw
     corpus: alqac/additional_data/zalo/zalo_corpus.json
     test: [alqac/additional_data/zalo/zalo_question.json]
     retrieval_only: true
+    article_titles: false                      # Zalo articles have no title line
   vilegalexperts:
     format: full_text
     corpus: vilegalexperts/contexts            # one JSON per document: {link, name, passage, id}

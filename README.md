@@ -32,6 +32,30 @@ Two input forms are supported. Full-text documents (ViLegalExperts) are parsed w
 are already split into articles (ALQAC, Zalo) skip the chapter and article levels: the first line of each article is
 its title, the text before clause 1 is the lead-in, and clauses and points are parsed inside the article.
 
+Parsing rules:
+- Clauses must be numbered 1, 2, 3, ... and points follow the Vietnamese alphabet (a, b, c, d, đ, e, g, ...)
+  within their parent. A numbered line that breaks the sequence (a year, an amount, a quoted amendment) is kept as
+  continuation text and counted.
+- Articles must appear in increasing order, which ignores article headings quoted inside amendments. Numbering may
+  restart at Điều 1 only after a signature block or an "ban hành kèm theo" heading, which starts a new part (for
+  example, a decision followed by the regulation it issues, or annexed forms). Lookups use the main part.
+- Soft line wraps in scraped text are joined, trailer tags (`Chương: II`, `Mục: 3`) are attached to their article,
+  and signature blocks, annexes and enactment formulas after the last article are removed.
+- A document with no article becomes one fallback unit; the fallback rate is reported.
+
+Parse results (`scripts/02_parse_corpus.py`):
+
+| Corpus | Documents | Articles | Clauses | Clean articles | Fallback documents | Gold references resolved |
+|---|---|---|---|---|---|---|
+| ALQAC 2024 | 17 | 2,249 | 6,356 | 99.6% | 0% | 100% (article) |
+| ALQAC 2025 | 28 | 3,363 | 11,123 | 99.6% | 0% | 100% (article) |
+| Zalo 2021 | 3,271 | 61,425 | 195,594 | 98.3% | 0% | 100% (article) |
+| ViLegalExperts | 9,996 | 56,636 | 123,295 | 96.5% | 22.8% | 96.1% (article), 88.5% (clause), silver |
+
+A clean article has no out-of-sequence numbered line. ViLegalExperts fallback documents are decisions and official
+letters without articles. Most of its unresolved silver references point to another document (for example, an
+amending decree) or to articles missing from the released text.
+
 The index unit is the clause, together with its points. An article with no clauses is indexed as a single unit.
 Each unit is prefixed with a breadcrumb: `<document title> > Điều <n>. <article title> > Khoản <m>`.
 
@@ -182,7 +206,7 @@ SA-RAG/
 ## 8. Roadmap
 
 - [x] Data: download and statistics for ALQAC 2024/2025, Zalo 2021, ViLegalExperts; VLQA not released
-- [ ] Parser and unit tests; parse success rate
+- [x] Parser and unit tests; parse success rate
 - [ ] Clause units with breadcrumbs; BM25 and bge-m3 indexes
 - [ ] RRF and article aggregation; retrieval results for B1, B2, SA-RAG
 - [ ] Structural expansion (lead-in, cross-references)
