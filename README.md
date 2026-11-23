@@ -57,12 +57,24 @@ letters without articles. Most of its unresolved silver references point to anot
 amending decree) or to articles missing from the released text.
 
 The index unit is the clause, together with its points. An article with no clauses is indexed as a single unit.
-Each unit is prefixed with a breadcrumb: `<document title> > Điều <n>. <article title> > Khoản <m>`.
+Each unit is prefixed with a breadcrumb: `<document title> > Điều <n>. <article title> > Khoản <m>`. The article
+lead-in is not part of a clause unit; C3 adds it at packing time. Units longer than 512 bge-m3 tokens are split on
+line boundaries (sentence or word boundaries for a single long line), and each piece keeps the breadcrumb and its
+article mapping. Document codes are made readable in breadcrumbs (`47/2011/tt-bca` becomes `Thông tư 47/2011/TT-BCA`).
+
+Four index variants are built per corpus (`scripts/03_build_index.py`): clause units with breadcrumbs (SA-RAG),
+clause units without breadcrumbs (ablation), whole articles (B2, split only beyond 4,096 tokens) and 256-token
+windows with overlap 32 (B1). Every unit records the article(s) it covers, so all variants are scored at the article
+level.
 
 ### C2. Hierarchical retrieval
 Clauses are retrieved with BM25 (on word-segmented text) and bge-m3 dense retrieval, and the two rankings are fused
-with Reciprocal Rank Fusion (RRF). Clause scores are then aggregated into article scores (max by default; sum of
-top-2 as a variant), since gold labels in all datasets are at the article level (or document level).
+with weighted Reciprocal Rank Fusion (RRF, k = 60; each retriever returns 200 candidates). The BM25 weight (0.5,
+dense 1.0) was chosen on the ALQAC 2024 dev set only; with equal weights BM25 pulled the fused ranking below
+dense-only retrieval on Zalo. Clause scores are then aggregated into article scores (max by default; sum of
+top-2 as a variant), since gold labels in all datasets are at the article level (or document level). With rank-based
+RRF scores, max aggregation ranks articles exactly as their best clause, so the "without aggregation" ablation only
+differs downstream (packing, C4); sum of top-2 favours long articles and lowers R@1 (0.835 to 0.619 on ALQAC 2024).
 
 ### C3. Structural expansion
 - Parent lead-in: each selected clause is accompanied by its article title and the introductory sentence that

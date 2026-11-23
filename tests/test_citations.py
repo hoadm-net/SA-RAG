@@ -1,0 +1,42 @@
+from sarag.generation.citations import parse_answer, parse_citations, strip_invalid, verify
+from sarag.parsing.parser import parse_article_level
+
+DOC = parse_article_level("Luật Viên chức", [
+    {"id": "5", "text": "Nguyên tắc\n\n1. Tuân thủ pháp luật.\n\n2. Chịu sự giám sát."},
+    {"id": "6", "text": "Quản lý\n\n1. Tuyển dụng theo tiêu chuẩn."},
+])
+DOCS = {"Luật Viên chức": DOC}
+BLOCKS = [{"doc": "Luật Viên chức", "part": 0, "articles": ["5"], "label": "Luật Viên chức"}]
+
+
+def test_parse_citations_forms():
+    cs = parse_citations("A [Luật Viên chức, Điều 5, Khoản 2] B [Luật Viên chức, Điều 6] "
+                         "C [Luật Viên chức, Điều 5, khoản 1, điểm a] D [không phải trích dẫn]")
+    assert [(c.doc_label, c.article, c.clause, c.point) for c in cs] == [
+        ("Luật Viên chức", "5", 2, None), ("Luật Viên chức", "6", None, None), ("Luật Viên chức", "5", 1, "a")]
+
+
+def test_verify_statuses_and_strip():
+    text = ("Đúng [Luật Viên chức, Điều 5, Khoản 2] [Luật Viên chức, Điều 6] [Luật Viên chức, Điều 5, Khoản 9] "
+            "[Luật Cư trú, Điều 2] [luật viên chức, Điều 5]")
+    cs = verify(parse_citations(text), BLOCKS, DOCS)
+    assert [c.status for c in cs] == ["valid", "not_in_context", "not_in_tree", "unknown_document", "valid"]
+    cleaned = strip_invalid(text, cs)
+    assert "[Luật Viên chức, Điều 6]" not in cleaned and "[Luật Viên chức, Điều 5, Khoản 2]" in cleaned
+
+
+def test_verify_accepts_shortened_label_when_unambiguous():
+    blocks = [{"doc": "47/2011/tt-bca", "part": 0, "articles": ["7"], "label": "Thông tư 47/2011/TT-BCA"}]
+    doc = parse_article_level("47/2011/tt-bca", [{"id": "7", "text": "1. Nội dung."}], has_titles=False)
+    cs = verify(parse_citations("[47/2011/TT-BCA, Điều 7, Khoản 1]"), blocks, {"47/2011/tt-bca": doc})
+    assert cs[0].status == "valid" and cs[0].doc_id == "47/2011/tt-bca"
+
+
+def test_parse_answer_types():
+    assert parse_answer("Đáp án: Đúng\nVì ...", "Đúng/Sai") == "Đúng"
+    assert parse_answer("Đáp án: Sai.", "Đúng/Sai") == "Sai"
+    assert parse_answer("Đáp án: Không đúng", "Đúng/Sai") == "Sai"
+    assert parse_answer("Đáp án: C. Viên chức ...", "Trắc nghiệm") == "C"
+    assert parse_answer("Đáp án: (B)", "Trắc nghiệm") == "B"
+    assert parse_answer("Đáp án: 10 ngày [Luật Trọng tài thương mại, Điều 30].", "Tự luận") == "10 ngày"
+    assert parse_answer("không rõ", "Trắc nghiệm") == ""

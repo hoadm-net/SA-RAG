@@ -41,6 +41,8 @@ indexing:
   unit: clause                # clause | article | fixed
   breadcrumbs: true
   segmenter: pyvi             # pyvi | underthesea
+  max_unit_tokens: 512        # longer units are split on line boundaries (bge-m3 tokens)
+  max_article_tokens: 4096    # B2 article units: split only beyond the largest budget
   fixed_chunk:                # B1 baseline
     size: 256
     overlap: 32
@@ -49,6 +51,9 @@ retrieval:
   bm25: true
   dense: true
   rrf_k: 60
+  bm25_weight: 0.5             # weighted RRF; chosen on the ALQAC 2024 dev set (100 questions) only
+  dense_weight: 1.0
+  candidates: 200             # units returned by each retriever before fusion
   top_k_units: 50
   top_k_articles: 10
   aggregation: max            # max | sum_top2 | none (rank clauses directly)
@@ -58,10 +63,15 @@ expansion:
   parent_lead_in: true
   cross_refs: true
   max_hops: 1
+  xref_decay: 0.5             # referenced unit score = source score x decay
+  max_targets: 8              # referenced units added per source unit
 
 packing:
   budget: 2048                # one of 1024 | 2048 | 4096, generator tokens incl. prompt template
   strategy: score_per_token   # score_per_token | topk_truncate
+  length_exponent: 1.0        # priority = score / tokens^exponent
+  article_weight: 0.5         # priority blends article (max) score and unit score; 0 when aggregation is none
+  max_candidates: 60
 
 generation:
   generator: qwen2.5-3b

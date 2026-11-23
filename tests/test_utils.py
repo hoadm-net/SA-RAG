@@ -14,7 +14,7 @@ def test_sarag_config_inherits_defaults():
 
 def test_ablation_overrides_only_its_component():
     cfg = load_config("configs/experiments/ablation_no_packing.yaml")
-    assert cfg["packing"] == {"budget": 2048, "strategy": "topk_truncate"}
+    assert cfg["packing"]["budget"] == 2048 and cfg["packing"]["strategy"] == "topk_truncate"
     assert cfg["expansion"]["enabled"] is True
 
 
