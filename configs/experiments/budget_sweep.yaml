@@ -1,0 +1,5 @@
+# Grid expanded by the run scripts: every (system x generator x budget).
+name: budget_sweep
+systems: [baseline_b1_fixed.yaml, baseline_b2_article.yaml, sarag.yaml]
+generators: [qwen2.5-1.5b, qwen2.5-3b, qwen3-1.7b, sailor2-1b, qwen2.5-7b]
+budgets: [1024, 2048, 4096]

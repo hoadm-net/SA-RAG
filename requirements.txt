@@ -1,0 +1,38 @@
+# Core
+pyyaml>=6.0
+python-dotenv>=1.0
+tqdm>=4.66
+numpy>=1.26
+pandas>=2.1
+orjson>=3.9
+
+# Data
+datasets>=2.19
+huggingface_hub>=0.23
+
+# Vietnamese NLP
+pyvi>=0.1.1
+underthesea>=6.8
+
+# Retrieval
+bm25s>=0.2
+FlagEmbedding>=1.2          # bge-m3
+# GPU is Blackwell (cc 12.0): torch must be a CUDA >= 12.8 build (default PyPI index is fine;
+# do NOT pin an old --index-url like cu124).
+torch>=2.7
+
+# Generation
+transformers>=4.51          # Qwen3 support
+vllm>=0.9
+llama-cpp-python>=0.3       # local benchmarks (build with CMAKE_ARGS="-DGGML_CUDA=on" for GPU)
+
+# Judge (OpenRouter, OpenAI-compatible)
+openai>=1.30
+
+# Evaluation / reporting
+scipy>=1.11
+matplotlib>=3.8
+psutil>=5.9
+
+# Dev
+pytest>=8.0

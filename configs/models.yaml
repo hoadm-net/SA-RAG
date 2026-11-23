@@ -1,0 +1,22 @@
+generators:
+  qwen2.5-1.5b: {hf_id: Qwen/Qwen2.5-1.5B-Instruct}
+  qwen2.5-3b:   {hf_id: Qwen/Qwen2.5-3B-Instruct}
+  qwen3-1.7b:   {hf_id: Qwen/Qwen3-1.7B, enable_thinking: false}
+  sailor2-1b:   {hf_id: sail/Sailor2-1B-Chat}
+  qwen2.5-7b:   {hf_id: Qwen/Qwen2.5-7B-Instruct, upper_bound: true}
+
+retrievers:
+  dense:
+    hf_id: BAAI/bge-m3
+    max_length: 512
+    batch_size: 32
+    fp16: true
+  sparse:
+    library: bm25s
+
+judge:
+  provider: openrouter
+  base_url: https://openrouter.ai/api/v1
+  model: TODO               # fix one model version for all runs
+  temperature: 0.0
+  api_key_env: OPENROUTER_API_KEY

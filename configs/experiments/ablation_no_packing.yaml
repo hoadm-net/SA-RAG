@@ -1,0 +1,4 @@
+_base_: ../default.yaml
+name: ablation_no_packing
+packing: {budget: 2048, strategy: topk_truncate}
+generation: {generator: qwen2.5-3b}

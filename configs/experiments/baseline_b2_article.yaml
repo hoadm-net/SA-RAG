@@ -1,0 +1,7 @@
+_base_: ../default.yaml
+name: b2_article
+indexing: {unit: article, breadcrumbs: false}
+retrieval: {aggregation: none}
+expansion: {enabled: false}
+packing: {strategy: topk_truncate}
+generation: {verify_citations: false}
