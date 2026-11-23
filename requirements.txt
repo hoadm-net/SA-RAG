@@ -32,6 +32,7 @@ openai>=1.30
 # Evaluation / reporting
 scipy>=1.11
 matplotlib>=3.8
+tabulate>=0.9                # pandas to_markdown
 psutil>=5.9
 
 # Dev
