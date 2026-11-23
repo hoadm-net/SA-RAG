@@ -69,7 +69,7 @@ expansion:
 packing:
   budget: 2048                # one of 1024 | 2048 | 4096, generator tokens incl. prompt template
   strategy: score_per_token   # score_per_token | topk_truncate
-  length_exponent: 1.0        # priority = score / tokens^exponent
+  length_exponent: 0.0        # priority = score / tokens^exponent; 0 chosen on dev (1.0 lowered context recall 0.98 -> 0.80 at B=1024)
   article_weight: 0.5         # priority blends article (max) score and unit score; 0 when aggregation is none
   max_candidates: 60
 
@@ -78,6 +78,7 @@ generation:
   backend: vllm               # vllm | llamacpp
   temperature: 0.0
   max_new_tokens: 512
+  prompt: v1                  # v0 instruction only | v1 + placeholder citation format (chosen on dev)
   verify_citations: true
 
 evaluation:

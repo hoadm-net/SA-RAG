@@ -3,3 +3,4 @@ name: ablation_no_expansion
 packing: {budget: 2048}
 generation: {generator: qwen2.5-3b}
 expansion: {enabled: false}
+retrieval_from: sarag             # same retrieval as SA-RAG; only C3/C4 differ

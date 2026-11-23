@@ -56,7 +56,8 @@ def candidates(rec: dict, store: UnitStore, cfg: dict) -> list[Candidate]:
 def pack_stage(name, system, gen_key, budget, cfg, models, tag, split):
     pcfg, xcfg = cfg["packing"], cfg["expansion"]
     run = f"{cfg['name']}{tag}" + ("_dev" if split == "dev" else "")
-    retr_path = resolve_path(cfg["paths"]["outputs"]) / "retrieval" / name / f"{cfg['name']}{'_dev' if split == 'dev' else ''}.jsonl"
+    retr_name = cfg.get("retrieval_from", cfg["name"])        # ablations of C3/C4 reuse SA-RAG retrieval
+    retr_path = resolve_path(cfg["paths"]["outputs"]) / "retrieval" / name / f"{retr_name}{'_dev' if split == 'dev' else ''}.jsonl"
     processed = resolve_path(cfg["paths"]["processed"]) / name
     store = UnitStore.load(processed, index_variant(cfg))
     docs = list(store.docs.values())
@@ -65,7 +66,8 @@ def pack_stage(name, system, gen_key, budget, cfg, models, tag, split):
     from transformers import AutoTokenizer
     gcfg = models["generators"][gen_key]
     pb = PromptBuilder(AutoTokenizer.from_pretrained(gcfg["hf_id"]),
-                       False if gcfg.get("enable_thinking") is False else None)
+                       False if gcfg.get("enable_thinking") is False else None,
+                       cfg["generation"]["prompt"])
     packer = Packer(store, pb.count, lead_in=xcfg["enabled"] and xcfg["parent_lead_in"], truncate=pb.truncate)
 
     out_rows, recalls, used, over = [], [], [], 0
@@ -124,11 +126,13 @@ def generate_stage(name, system, gen_key, budget, cfg, models, tag, split, engin
         from sarag.generation.backends import VLLMGenerator
         engine_cache[gen_key] = VLLMGenerator(gcfg["hf_id"], max_model_len=gcfg.get("max_model_len", 6144),
                                               gpu_memory_utilization=gcfg.get("gpu_memory_utilization", 0.85),
-                                              max_new_tokens=gcfg_all["max_new_tokens"], seed=cfg["seed"])
+                                              max_new_tokens=gcfg_all["max_new_tokens"], seed=cfg["seed"],
+                                              **gcfg.get("engine_kwargs", {}))
     engine = engine_cache[gen_key]
     from transformers import AutoTokenizer
     pb = PromptBuilder(AutoTokenizer.from_pretrained(gcfg["hf_id"]),
-                       False if gcfg.get("enable_thinking") is False else None)
+                       False if gcfg.get("enable_thinking") is False else None,
+                       cfg["generation"]["prompt"])
     prompts = [pb.render(qmap[r["question_id"]], r["context"]) for r in rows]
     texts, latency = engine.generate(prompts)
     preds = []
