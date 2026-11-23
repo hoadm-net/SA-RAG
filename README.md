@@ -83,10 +83,18 @@ differs downstream (packing, C4); sum of top-2 favours long articles and lowers 
   resolved within the same document, and the referenced clause or article is added (one hop).
 
 ### C4. Budget-aware packing and citation-grounded generation
-- For a token budget B in {1024, 2048, 4096}, counted with the generator's tokenizer, units are selected greedily by
-  score per token until the budget is reached. Duplicates are removed and units from the same article keep their
-  original order.
-- The generator is prompted in Vietnamese to answer with citations of the form `[<doc_id>, Điều X, Khoản Y]`.
+- For a token budget B in {1024, 2048, 4096}, counted with the generator's tokenizer over the whole chat-formatted
+  prompt, units are added greedily in priority order, skipping any unit that would overflow, until nothing else
+  fits. The budget is checked on the rendered context, so article headers and lead-ins are paid for. Duplicates are
+  removed and units from the same article keep their original order.
+- Priority blends a unit's own score with its article's aggregated score (weight 0.5); without aggregation the
+  unit score is used alone. Dividing by the unit's length (score per token) was tested on the dev set and lowered
+  context recall from 0.98 to 0.80 at B = 1024, because RRF scores are flat across ranks while clause lengths vary
+  several-fold, so the length exponent is 0.
+- The context is grouped by article: `[<document>, Điều X. <title>]`, the lead-in (C3), then the clauses.
+- The generator is prompted in Vietnamese to answer with citations of the form `[<document>, Điều X, Khoản Y]`.
+  The prompt shows the format with placeholders only: on the dev set a concrete example citation was copied
+  verbatim by the 1.5B model and a concrete example answer biased true/false predictions.
 - Citations in the output are parsed and checked against the document tree and the packed context; invalid
   citations are removed and counted.
 
@@ -124,7 +132,7 @@ All generation uses greedy decoding (temperature 0).
 | Generator | Qwen2.5-3B-Instruct | `Qwen/Qwen2.5-3B-Instruct` | Qwen2.5 Technical Report |
 | Generator | Qwen3-1.7B (non-thinking mode) | `Qwen/Qwen3-1.7B` | Qwen3 Technical Report |
 | Generator | Sailor2-1B-Chat | `sail/Sailor2-1B-Chat` | Sailor2 |
-| Upper bound | Qwen2.5-7B-Instruct | `Qwen/Qwen2.5-7B-Instruct` | Qwen2.5 Technical Report |
+| Upper bound | Qwen2.5-7B-Instruct (FP8 weights in vLLM, to fit a 16 GB GPU) | `Qwen/Qwen2.5-7B-Instruct` | Qwen2.5 Technical Report |
 | Dense retriever | bge-m3 | `BAAI/bge-m3` | M3-Embedding |
 | Sparse retriever | BM25 (`bm25s`) | - | Robertson & Zaragoza |
 | Word segmentation | pyvi / underthesea | - | - |
@@ -219,17 +227,32 @@ SA-RAG/
 
 - [x] Data: download and statistics for ALQAC 2024/2025, Zalo 2021, ViLegalExperts; VLQA not released
 - [x] Parser and unit tests; parse success rate
-- [ ] Clause units with breadcrumbs; BM25 and bge-m3 indexes
-- [ ] RRF and article aggregation; retrieval results for B1, B2, SA-RAG
-- [ ] Structural expansion (lead-in, cross-references)
-- [ ] Budget-aware packing
-- [ ] Generation, citation parsing and verification
+- [x] Clause units with breadcrumbs; BM25 and bge-m3 indexes
+- [x] RRF and article aggregation; retrieval results for B1, B2, SA-RAG
+- [x] Structural expansion (lead-in, cross-references)
+- [x] Budget-aware packing
+- [x] Generation, citation parsing and verification
 - [ ] Main experiments, ablations, budget sweep
-- [ ] Judge evaluation and bootstrap confidence intervals
+- [x] Bootstrap confidence intervals
+- [ ] Judge evaluation (judge model to be fixed)
 - [ ] Local llama.cpp benchmarks
 - [ ] Tables and figures
 
-## 9. References
+## 9. Results so far
+
+Article-level retrieval on the test sets (hybrid retrieval, final settings; ViLegalExperts uses silver labels):
+
+| System | ALQAC 2024 R@1 / MRR@10 | ALQAC 2025 R@1 / MRR@10 | Zalo R@1 / MRR@10 | ViLegalExperts R@1 / MRR@10 |
+|---|---|---|---|---|
+| B1, fixed 256-token windows | 0.496 / 0.678 | 0.518 / 0.668 | 0.403 / 0.555 | 0.398 / 0.610 |
+| B2, article chunks | 0.781 / 0.862 | 0.713 / 0.804 | 0.501 / 0.635 | 0.542 / 0.741 |
+| SA-RAG, clause units + breadcrumbs | **0.841 / 0.897** | **0.726 / 0.817** | **0.539 / 0.660** | **0.580 / 0.762** |
+| SA-RAG without breadcrumbs | 0.772 / 0.833 | 0.665 / 0.755 | 0.524 / 0.650 | 0.471 / 0.650 |
+
+Breadcrumbs matter most where clause text alone lacks context (ViLegalExperts full texts, +0.109 R@1) and least on
+Zalo, whose articles have no titles and whose document names are codes.
+
+## 10. References
 
 - Qwen Team. Qwen2.5 Technical Report. 2024.
 - Qwen Team. Qwen3 Technical Report. 2025.
