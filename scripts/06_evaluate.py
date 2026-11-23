@@ -24,6 +24,7 @@ def main() -> None:
     p.add_argument("--datasets", nargs="+", default=["alqac2024", "alqac2025", "vilegalexperts"])
     p.add_argument("--pattern", default="*.jsonl", help="glob over outputs/predictions/<dataset>/")
     p.add_argument("--judge", action="store_true", help="also run the LLM judge (costs money)")
+    p.add_argument("--judge-limit", type=int, default=0, help="judge only the first N eligible questions (pilot)")
     args = p.parse_args()
 
     base = load_config("configs/default.yaml")
@@ -47,8 +48,8 @@ def main() -> None:
             preds = list(read_jsonl(f))
             m = evaluate_predictions(preds, qmaps[split], verified, base["evaluation"]["bootstrap_samples"],
                                      base["evaluation"]["ci"])
-            if args.judge and name == "vilegalexperts":
-                m["judge"] = run_judge(preds, qmaps[split], base)
+            if args.judge:
+                m["judge"] = run_judge(preds, qmaps[split], base, args.judge_limit)
             out = resolve_path(base["paths"]["outputs"]) / "metrics" / "qa" / name / f"{f.stem}.json"
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(m, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -71,15 +72,31 @@ def main() -> None:
         print(f"summary -> {out}")
 
 
-def run_judge(preds, qmap, base) -> dict:
+def run_judge(preds, qmap, base, limit: int = 0) -> dict:
+    """Judge free-text answers: long-form answers (ViLegalExperts) and 'Tự luận' questions (ALQAC)."""
+    from concurrent.futures import ThreadPoolExecutor
+
     from sarag.evaluation.judge import Judge
 
     jcfg = load_models()["judge"]
     judge = Judge(jcfg["model"], jcfg["base_url"], jcfg["api_key_env"], resolve_path(base["paths"]["cache"]),
                   jcfg["temperature"])
-    scores = [judge.score(qmap[p["question_id"]].text, qmap[p["question_id"]].answer, p["answer"]) for p in preds]
-    return {"mean_score": sum(s["score"] for s in scores) / len(scores),
-            "correct_rate": sum(s["correct"] for s in scores) / len(scores)}
+    todo = [p for p in preds if qmap[p["question_id"]].qtype in ("", "Tự luận")]
+    if limit:
+        todo = todo[:limit]
+    if not todo:
+        return {"n": 0, "mean_score": float("nan"), "correct_rate": float("nan")}
+
+    def one(p):
+        q = qmap[p["question_id"]]
+        return judge.score(q.text, q.answer, p["answer"])
+
+    with ThreadPoolExecutor(jcfg.get("workers", 16)) as ex:
+        scores = list(ex.map(one, todo))
+    valid = [s for s in scores if 1 <= s["score"] <= 5]
+    return {"n": len(todo), "n_unparsed": len(todo) - len(valid), "model": jcfg["model"],
+            "mean_score": sum(s["score"] for s in valid) / len(valid) if valid else float("nan"),
+            "correct_rate": sum(s["correct"] for s in valid) / len(valid) if valid else float("nan")}
 
 
 if __name__ == "__main__":

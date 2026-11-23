@@ -136,7 +136,7 @@ All generation uses greedy decoding (temperature 0).
 | Dense retriever | bge-m3 | `BAAI/bge-m3` | M3-Embedding |
 | Sparse retriever | BM25 (`bm25s`) | - | Robertson & Zaragoza |
 | Word segmentation | pyvi / underthesea | - | - |
-| Judge | GPT or Claude, via OpenRouter | see `configs/models.yaml` | Provider technical report |
+| Judge | Claude Haiku 5.5, via OpenRouter (`anthropic/claude-haiku-5.5`) | - | Provider model card |
 
 ## 5. Experiments
 
@@ -149,7 +149,8 @@ All systems share the same retrievers, generator and token budget.
 ### 5.2 Ablations
 Run on SA-RAG with B = 2048 and Qwen2.5-3B-Instruct:
 - without breadcrumbs (C1)
-- without clause-to-article aggregation, ranking clauses directly (C2)
+- without clause-to-article aggregation (C2): packing priority uses each clause's own score only (article weight 0);
+  with max aggregation the article ranking itself equals the ranking by best clause, so retrieval metrics are unchanged
 - without structural expansion (C3)
 - without budget-aware packing, using plain top-k truncation (C4)
 - without citation verification (C4)

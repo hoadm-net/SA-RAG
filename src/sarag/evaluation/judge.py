@@ -40,14 +40,22 @@ class Judge:
         hit = self.cache.get(key)
         if hit is not None:
             return hit
-        resp = self.client.chat.completions.create(model=self.model, temperature=self.temperature,
-                                                   messages=[{"role": "user", "content": prompt}])
-        text = resp.choices[0].message.content or ""
-        m = re.search(r"\{.*\}", text, re.S)
-        try:
-            out = json.loads(m.group(0)) if m else {}
-        except json.JSONDecodeError:
-            out = {}
-        result = {"score": int(out.get("score", 0) or 0), "correct": bool(out.get("correct", False)), "raw": text}
-        self.cache.set(key, result)
+        result = {}
+        for _ in range(2):                                   # one retry if the reply has no parsable JSON
+            # Reasoning is disabled: with it on, the token cap was spent on reasoning and the content was empty.
+            resp = self.client.chat.completions.create(
+                model=self.model, temperature=self.temperature, max_tokens=256,
+                messages=[{"role": "user", "content": prompt}], extra_body={"reasoning": {"enabled": False}})
+            text = resp.choices[0].message.content or ""
+            m = re.search(r"\{.*\}", text, re.S)
+            try:
+                out = json.loads(m.group(0)) if m else {}
+            except json.JSONDecodeError:
+                out = {}
+            usage = getattr(resp, "usage", None)
+            result = {"score": int(out.get("score", 0) or 0), "correct": bool(out.get("correct", False)), "raw": text,
+                      "tokens": [getattr(usage, "prompt_tokens", 0), getattr(usage, "completion_tokens", 0)]}
+            if 1 <= result["score"] <= 5:
+                self.cache.set(key, result)                  # only parsed verdicts are cached
+                break
         return result
