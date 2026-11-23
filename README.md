@@ -61,15 +61,13 @@ top-2 as a variant), since gold labels in all datasets are at the article level 
 | ALQAC 2024 (main) | Retrieval, QA | public + private test, 308 questions (true/false, multiple choice, short free text) | 17 laws, 2,249 articles, pre-split by article | article |
 | ALQAC 2025 | Retrieval, QA (second test set) | private test, 82 questions (mostly scenario-based multiple choice) | 28 laws, 3,363 articles, pre-split by article | article |
 | Zalo Legal Text Retrieval 2021 | Retrieval at scale | 3,196 citizen questions | 3,271 documents (laws, decrees, circulars), 61,425 articles | article |
-| ViLegalExperts (Nguyen et al., 2026), deferred | Long-form QA, parsing of full-text documents | 773 test questions whose source document is released | 9,996 full-text documents with chapter / article / clause / point structure | document; article references extracted from the expert answer (silver) |
+| ViLegalExperts (Nguyen et al., 2026) | Long-form QA, parsing of full-text documents | 773 test questions whose source document is released | 9,996 full-text documents with chapter / article / clause / point structure | document; article references extracted from the expert answer (silver) |
 
 - ALQAC 2024, ALQAC 2025 and Zalo come from Hugging Face `nguyenlab/ALQAC` (gated). ViLegalExperts comes from
   `DatNguyenAIML/ViLegalExperts` (arXiv:2609.39189).
 - Dev set: the 100 expert-verified ALQAC 2024 training questions, used only for prompt design.
 - Zalo has no answers and is used for retrieval only. No official labelled test split is public, and the method
   is training-free, so all 3,196 questions are evaluated.
-- ViLegalExperts is deferred: the Hugging Face download of its ~10k context files is heavily rate-limited (6,506
-  fetched so far, covering 566 of the 773 usable test questions). It will be completed later.
 - ViLegalExperts: only 773 of the 17,821 test questions currently have their source document in the release; we
   evaluate on these, with all 9,996 released documents as the retrieval corpus. Article-level labels are silver
   labels parsed from the expert answers (`Điều N`, `khoản M Điều N`) and are reported separately from gold metrics.
@@ -183,8 +181,7 @@ SA-RAG/
 
 ## 8. Roadmap
 
-- [x] Data: download and statistics for ALQAC 2024/2025 and Zalo 2021; VLQA not released
-- [ ] Data: complete the ViLegalExperts context download (deferred)
+- [x] Data: download and statistics for ALQAC 2024/2025, Zalo 2021, ViLegalExperts; VLQA not released
 - [ ] Parser and unit tests; parse success rate
 - [ ] Clause units with breadcrumbs; BM25 and bge-m3 indexes
 - [ ] RRF and article aggregation; retrieval results for B1, B2, SA-RAG

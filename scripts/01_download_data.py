@@ -5,8 +5,11 @@ Roadmap: Data
 
 import collections
 import json
+import os
 import re
+import shutil
 import statistics as st
+import subprocess
 import sys
 from pathlib import Path
 
@@ -40,13 +43,31 @@ def _snapshot(repo: str, out: Path, patterns: list[str]) -> None:
                  "with the account that owns HF_TOKEN, then rerun.")
 
 
+def _clone_contexts(out: Path) -> None:
+    tmp = out / "_git"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    env = {**os.environ, "GIT_LFS_SKIP_SMUDGE": "1"}
+    subprocess.run(["git", "-c", f"http.extraHeader=Authorization: Bearer {require_env('HF_TOKEN')}",
+                    "clone", "-q", "--depth", "1", f"https://huggingface.co/datasets/{VLE_REPO}", str(tmp)],
+                   check=True, env=env)
+    dst = out / "contexts"
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in (tmp / "contexts").glob("*.json"):
+        shutil.copy2(f, dst / f.name)
+    shutil.rmtree(tmp)
+
+
 def download(name: str, raw: Path) -> None:
     if name in ("alqac2024", "alqac2025", "zalo"):
         sub = {"alqac2024": "ALQAC_2024/*", "alqac2025": "ALQAC_2025/*", "zalo": "additional_data/zalo/*"}[name]
         _snapshot(ALQAC_REPO, raw / "alqac", ["README.md", sub])
     elif name == "vilegalexperts":
-        # Test split + every released context document (~0.26 GB); train/dev are not needed (training-free).
-        _snapshot(VLE_REPO, raw / "vilegalexperts", ["README.md", "QA_single_context/test_data.json", "contexts/*"])
+        # Test split via the Hub API (one LFS file); the ~10k small context files via a single git clone,
+        # because per-file API downloads hit the Hub's request rate limit (HTTP 429).
+        out = raw / "vilegalexperts"
+        _snapshot(VLE_REPO, out, ["README.md", "QA_single_context/test_data.json"])
+        _clone_contexts(out)
     else:
         raise ValueError(name)
     print(f"downloaded {name}")
