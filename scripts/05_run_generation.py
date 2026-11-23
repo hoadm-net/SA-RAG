@@ -48,7 +48,7 @@ def candidates(rec: dict, store: UnitStore, cfg: dict) -> list[Candidate]:
     out = []
     for i, s in units:
         u = store.units[i]
-        a = max(art_best[(u["doc_id"], u["part"], x)] for x in u["articles"])
+        a = max((art_best[(u["doc_id"], u["part"], x)] for x in u["articles"]), default=s)  # empty-text windows map to no article
         out.append(Candidate(i, lam * a + (1 - lam) * s))
     return out
 

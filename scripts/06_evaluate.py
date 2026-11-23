@@ -6,6 +6,7 @@ Roadmap: Evaluation
 import argparse
 import csv
 import json
+import re
 from pathlib import Path
 
 from sarag.datasets import load_questions
@@ -39,7 +40,7 @@ def main() -> None:
             if split not in qmaps:
                 qmaps[split] = {q.qid: q for q in load_questions(name, base["datasets"][name],
                                                                  resolve_path(base["paths"]["raw"]), docs, split)}
-            system = run.removesuffix("_dev").split("_v")[0]
+            system = re.sub(r"_v\d+$", "", run.removesuffix("_dev"))   # drop prompt-version tags (_v0, _v1)
             cfg_file = resolve_path(f"configs/experiments/{system}.yaml")
             verified = (load_config(cfg_file)["generation"]["verify_citations"] if cfg_file.exists()
                         else base["generation"]["verify_citations"])
