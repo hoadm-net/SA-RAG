@@ -127,12 +127,14 @@ def main() -> None:
     if datasets:
         fig, axes = plt.subplots(1, len(datasets), figsize=(5 * len(datasets), 4), squeeze=False)
         styles = {"sarag": "-", "b2_article": "--", "b1_fixed": ":"}
+        gens = sorted(sweep["generator"].unique())
+        colors = {g: plt.cm.tab10(i) for i, g in enumerate(gens)}       # colour = generator, line style = system
         for ax, ds in zip(axes[0], datasets):
             metric = "acc" if ds.startswith("alqac") else "f1_long"
             d = sweep[sweep["dataset"] == ds]
             for (gen, run), g in d.groupby(["generator", "run"]):
                 g = g.sort_values("budget")
-                ax.plot(g["budget"], g[metric], styles.get(run, "-"), marker="o", label=f"{gen} / {SYSTEMS[run]}")
+                ax.plot(g["budget"], g[metric], styles.get(run, "-"), marker="o", color=colors[gen])
             if not bench.empty:
                 for _, r in bench[(bench["setting"] == "gpu") & (bench["generator"] == "qwen2.5-3b")].iterrows():
                     ax.annotate(f"{r['latency_s']:.1f}s, {r['peak_gpu_mib'] / 1024:.1f}GB", (r["budget"], ax.get_ylim()[0]),
@@ -144,8 +146,12 @@ def main() -> None:
             ax.set_xlabel("token budget B")
             ax.set_ylabel("accuracy" if metric == "acc" else "token F1")
             ax.grid(alpha=0.3)
-        axes[0][-1].legend(fontsize=6, loc="lower right")
-        fig.tight_layout()
+        # Shared legend below the panels so it never covers data: colours for generators, line styles for systems.
+        from matplotlib.lines import Line2D
+        legend = [Line2D([], [], color=colors[g], marker="o", label=g) for g in gens]
+        legend += [Line2D([], [], color="black", linestyle=styles[r], label=SYSTEMS[r]) for r in ("sarag", "b2_article", "b1_fixed")]
+        fig.legend(handles=legend, loc="lower center", ncol=len(legend), fontsize=8, frameon=False)
+        fig.tight_layout(rect=(0, 0.08, 1, 1))
         fdir = out / "figures"
         fdir.mkdir(parents=True, exist_ok=True)
         fig.savefig(fdir / "figure1_budget.png", dpi=200)
