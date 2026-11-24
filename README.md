@@ -301,7 +301,7 @@ one question and citation precision by up to 0.03.
 | Qwen2.5-3B | 0.16 s / 0.52 s / 2.4 GB | 0.74 s / 23 / 4.5 s / 3.2 GB |
 | Qwen2.5-7B | 0.30 s / 0.85 s / 4.8 GB | 1.49 s / 11 / 9.0 s / 5.9 GB |
 
-Every generator fits a 6 GB GPU. The CPU figures come from 8 threads of a server CPU (a laptop will be slower), and
+Every generator fits a 6 GB GPU. The CPU figures come from 8 threads of a desktop AMD Ryzen 5 7500F (6 cores; a laptop will be slower), and
 llama.cpp reuses the KV cache of the shared system prompt, which lowers TTFT. Numbers for all budgets are in
 `outputs/metrics/local_benchmark.jsonl`.
 
