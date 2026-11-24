@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sarag.datasets import load_questions
 from sarag.evaluation.qa import evaluate_predictions
+from sarag.generation.citations import parse_answer, parse_citations, strip_invalid, verify
 from sarag.parsing.loaders import load_documents
 from sarag.utils.config import load_config, load_models, resolve_path
 from sarag.utils.io import read_jsonl
@@ -45,11 +46,14 @@ def main() -> None:
             cfg_file = resolve_path(f"configs/experiments/{system}.yaml")
             verified = (load_config(cfg_file)["generation"]["verify_citations"] if cfg_file.exists()
                         else base["generation"]["verify_citations"])
-            preds = list(read_jsonl(f))
+            preds = reverify(list(read_jsonl(f)), f, name, docs, qmaps[split], verified)
             m = evaluate_predictions(preds, qmaps[split], verified, base["evaluation"]["bootstrap_samples"],
                                      base["evaluation"]["ci"])
+            judged = {}
             if args.judge:
-                m["judge"] = run_judge(preds, qmaps[split], base, args.judge_limit)
+                m["judge"], judged = run_judge(preds, qmaps[split], base, args.judge_limit)
+            write_per_question(preds, qmaps[split], judged,
+                               resolve_path(base["paths"]["outputs"]) / "metrics" / "qa" / name / f"{f.stem}.perq.jsonl")
             out = resolve_path(base["paths"]["outputs"]) / "metrics" / "qa" / name / f"{f.stem}.json"
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(m, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -70,6 +74,25 @@ def main() -> None:
             w.writeheader()
             w.writerows(rows)
         print(f"summary -> {out}")
+
+
+def reverify(preds: list[dict], pred_file: Path, name: str, docs, qmap, verified: bool) -> list[dict]:
+    """Re-parse answers and citations from the raw outputs with the current parser, against the packed
+    context saved for the run, so metrics never depend on the parser version used at generation time."""
+    ctx_file = pred_file.parent.parent.parent / "contexts" / name / pred_file.name
+    if not ctx_file.exists():
+        return preds
+    blocks = {r["question_id"]: r["blocks"] for r in read_jsonl(ctx_file)}
+    doc_map = {d.doc_id: d for d in docs}
+    for p in preds:
+        if p["question_id"] not in blocks:
+            continue
+        cites = verify(parse_citations(p["raw_output"]), blocks[p["question_id"]], doc_map)
+        p["citations"] = [c.to_dict() for c in cites]
+        p["n_invalid_citations"] = sum(c.status != "valid" for c in cites)
+        p["answer"] = strip_invalid(p["raw_output"], cites) if verified else p["raw_output"]
+        p["pred"] = parse_answer(p["raw_output"], qmap[p["question_id"]].qtype)
+    return preds
 
 
 def run_judge(preds, qmap, base, limit: int = 0) -> dict:
@@ -94,9 +117,29 @@ def run_judge(preds, qmap, base, limit: int = 0) -> dict:
     with ThreadPoolExecutor(jcfg.get("workers", 16)) as ex:
         scores = list(ex.map(one, todo))
     valid = [s for s in scores if 1 <= s["score"] <= 5]
+    per_q = {p["question_id"]: s["score"] for p, s in zip(todo, scores) if 1 <= s["score"] <= 5}
     return {"n": len(todo), "n_unparsed": len(todo) - len(valid), "model": jcfg["model"],
             "mean_score": sum(s["score"] for s in valid) / len(valid) if valid else float("nan"),
-            "correct_rate": sum(s["correct"] for s in valid) / len(valid) if valid else float("nan")}
+            "correct_rate": sum(s["correct"] for s in valid) / len(valid) if valid else float("nan")}, per_q
+
+
+def write_per_question(preds, qmap, judged: dict, path: Path) -> None:
+    """One line per question with the scores used for paired comparisons in 08."""
+    from sarag.evaluation.qa import token_f1
+
+    with open(path, "w", encoding="utf-8") as fh:
+        for p in preds:
+            q = qmap[p["question_id"]]
+            rec = {"question_id": q.qid, "qtype": q.qtype}
+            if q.qtype in ("Đúng/Sai", "Trắc nghiệm"):
+                rec["correct"] = float(p["pred"] == q.answer)
+            elif q.qtype == "Tự luận":
+                rec["f1"] = token_f1(p["pred"], q.answer)
+            else:
+                rec["f1"] = token_f1(p["answer"], q.answer)
+            if q.qid in judged:
+                rec["judge"] = judged[q.qid]
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":

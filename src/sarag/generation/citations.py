@@ -8,9 +8,11 @@ from dataclasses import asdict, dataclass
 
 from ..parsing.tree import Document
 
+# Also accepted (seen in model outputs): an article title after the number ("Điều 27. Điều kiện ...")
+# and a point letter written as a clause ("Khoản a"), which is read as that point with no clause.
 CITATION_RE = re.compile(
-    r"\[\s*(?P<doc>[^\[\]]+?)\s*,\s*Điều\s+(?P<art>\d+[a-zđ]?)"
-    r"(?:\s*,\s*[Kk]hoản\s+(?P<cl>\d+))?(?:\s*,\s*[Đđ]iểm\s+(?P<pt>[a-zđ]))?\s*\]")
+    r"\[\s*(?P<doc>[^\[\]]+?)\s*,\s*Điều\s+(?P<art>\d+[a-zđ]?)(?:\s*\.\s*[^,\[\]]*)?"
+    r"(?:\s*,\s*[Kk]hoản\s+(?:(?P<cl>\d+)|(?P<clpt>[a-zđ]))\b)?(?:\s*,\s*[Đđ]iểm\s+(?P<pt>[a-zđ]))?\s*\]")
 ANSWER_RE = re.compile(r"Đáp án\s*[:：]\s*(?P<ans>.+)", re.I)
 
 
@@ -30,7 +32,8 @@ class Citation:
 
 def parse_citations(text: str) -> list[Citation]:
     return [Citation(m.group(0), m.group("doc").strip(), m.group("art"),
-                     int(m.group("cl")) if m.group("cl") else None, m.group("pt")) for m in CITATION_RE.finditer(text)]
+                     int(m.group("cl")) if m.group("cl") else None, m.group("pt") or m.group("clpt"))
+            for m in CITATION_RE.finditer(text)]
 
 
 def _norm(s: str) -> str:

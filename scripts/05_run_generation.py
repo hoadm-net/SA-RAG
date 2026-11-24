@@ -175,6 +175,11 @@ def main() -> None:
                 if name == "zalo" and args.stage == "generate":
                     continue                              # retrieval-only dataset
                 for b in args.budgets:
+                    window = models["generators"][gen].get("max_model_len", 6144)
+                    if b + cfg["generation"]["max_new_tokens"] > window:
+                        print(f"[skip] {name} {system} {gen} B={b}: budget + answer exceeds the {window}-token window",
+                              flush=True)
+                        continue
                     if args.stage == "pack":
                         all_stats.append(pack_stage(name, system, gen, b, cfg, models, args.tag, args.split))
                     else:

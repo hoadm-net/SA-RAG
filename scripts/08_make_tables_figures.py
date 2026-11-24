@@ -17,6 +17,7 @@ ABLATIONS = {"sarag": "SA-RAG (full)", "ablation_no_breadcrumbs": "w/o breadcrum
              "ablation_no_aggregation": "w/o aggregation (C2)", "ablation_no_expansion": "w/o expansion (C3)",
              "ablation_no_packing": "w/o budget-aware packing (C4)",
              "ablation_no_citation_verify": "w/o citation verification (C4)"}
+ALQAC_EXCLUDED = ["sailor2-1b"]
 QA_COLS = {"alqac2024": ["acc", "f1_free", "cit_precision", "cit_recall"],
            "alqac2025": ["acc", "f1_free", "cit_precision", "cit_recall"],
            "vilegalexperts": ["f1_long", "cit_precision", "cit_recall"]}
@@ -38,6 +39,44 @@ def to_markdown(df: pd.DataFrame) -> str:
     return df.to_markdown(index=False, floatfmt=".3f") if not df.empty else "(no results yet)\n"
 
 
+def paired_tables(out: Path) -> list[str]:
+    """Table 3: SA-RAG minus a baseline, per budget, pooled over generators; question-cluster bootstrap CIs."""
+    from sarag.evaluation.retrieval import cluster_bootstrap_diff
+    from sarag.utils.io import read_jsonl
+
+    def perq(ds, run, gen, b):
+        f = out / "metrics" / "qa" / ds / f"{run}__{gen}__B{b}.perq.jsonl"
+        return {r["question_id"]: r for r in read_jsonl(f)} if f.exists() else None
+
+    metrics = {"alqac": [("correct", "accuracy")], "vilegalexperts": [("f1", "token F1"), ("judge", "judge score")]}
+    rows = []
+    for base in ("b2_article", "b1_fixed"):
+        for ds_group, ds_list in (("alqac", ["alqac2024", "alqac2025"]), ("vilegalexperts", ["vilegalexperts"])):
+            for key, label in metrics[ds_group]:
+                for b in (512, 1024, 2048, 4096):
+                    diffs: dict = {}
+                    gens_used = set()
+                    for ds in ds_list:
+                        for gen in sorted({f.name.split("__")[1] for f in (out / "metrics" / "qa" / ds).glob(f"sarag__*__B{b}.perq.jsonl")}):
+                            if ds.startswith("alqac") and gen in ALQAC_EXCLUDED:
+                                continue
+                            a, c = perq(ds, "sarag", gen, b), perq(ds, base, gen, b)
+                            if not a or not c:
+                                continue
+                            gens_used.add(gen)
+                            for qid, r in a.items():
+                                if key in r and qid in c and key in c[qid]:
+                                    diffs.setdefault(f"{ds}|{qid}", []).append(r[key] - c[qid][key])
+                    if diffs:
+                        m, lo, hi = cluster_bootstrap_diff(diffs)
+                        rows.append({"vs": SYSTEMS[base], "data": ds_group, "metric": label, "B": b,
+                                     "generators": len(gens_used), "questions": len(diffs),
+                                     "diff": m, "ci_low": lo, "ci_high": hi,
+                                     "significant": "yes" if lo > 0 or hi < 0 else ""})
+    return ["\n## Table 3. Paired difference, SA-RAG minus baseline, pooled over generators "
+            "(95% CI, bootstrap over questions)\n", to_markdown(pd.DataFrame(rows))]
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--budget", type=int, default=2048)
@@ -48,6 +87,9 @@ def main() -> None:
     tdir.mkdir(parents=True, exist_ok=True)
     qa = pd.read_csv(out / "metrics" / "qa_summary.csv")
     qa = qa[~qa["run"].str.endswith("_dev")]
+    # Sailor2-1B does not follow the answer format on ALQAC (always "Đúng" on true/false, copies the
+    # placeholder on multiple choice), so it is left out of ALQAC tables; it stays in ViLegalExperts.
+    qa = qa[~(qa["dataset"].str.startswith("alqac") & qa["generator"].isin(ALQAC_EXCLUDED))]
 
     # Table 1: retrieval + QA + citation for B1, B2, SA-RAG, all generators, at the main budget.
     parts = ["## Table 1a. Article-level retrieval\n", to_markdown(retrieval_table(out, SYSTEMS))]
@@ -69,6 +111,7 @@ def main() -> None:
         if not d.empty:
             d = d.assign(variant=d["run"].map(ABLATIONS))[["variant", *cols, "removed", "share_in_tree"]]
             parts += [f"\n## Table 2b. Ablations, {ds} ({args.ablation_generator}, B = {args.budget})\n", to_markdown(d)]
+    parts += paired_tables(out)
     (tdir / "tables.md").write_text("\n".join(parts), encoding="utf-8")
     print(f"tables -> {tdir / 'tables.md'}")
 
@@ -95,7 +138,8 @@ def main() -> None:
                     ax.annotate(f"{r['latency_s']:.1f}s, {r['peak_gpu_mib'] / 1024:.1f}GB", (r["budget"], ax.get_ylim()[0]),
                                 fontsize=7, ha="center", va="bottom")
             ax.set_xscale("log", base=2)
-            ax.set_xticks([1024, 2048, 4096], ["1024", "2048", "4096"])
+            ticks = sorted(d["budget"].unique())
+            ax.set_xticks(ticks, [str(t) for t in ticks])
             ax.set_title(ds)
             ax.set_xlabel("token budget B")
             ax.set_ylabel("accuracy" if metric == "acc" else "token F1")

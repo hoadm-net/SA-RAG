@@ -57,3 +57,17 @@ def test_token_f1_and_citation_scores():
     assert (s["cit_precision"], s["cit_recall"], s["in_tree"], s["n_kept"]) == (1.0, 1.0, 2, 1)
     s = citation_scores(pred, q, verified=False)
     assert s["cit_precision"] == 0.5 and s["n_kept"] == 2
+
+
+def test_parse_citations_with_title_and_point_as_clause():
+    cs = parse_citations("[Luật Cư trú, Điều 27. Điều kiện đăng ký tạm trú] và [Nghị định 166/2017/nđ-cp, Điều 32, Khoản a]")
+    assert [(c.doc_label, c.article, c.clause, c.point) for c in cs] == [
+        ("Luật Cư trú", "27", None, None), ("Nghị định 166/2017/nđ-cp", "32", None, "a")]
+
+
+def test_cluster_bootstrap_keeps_questions_together():
+    from sarag.evaluation.retrieval import cluster_bootstrap_diff
+    m, lo, hi = cluster_bootstrap_diff({"q1": [1.0, 1.0], "q2": [0.0, 0.0], "q3": [1.0, 0.0]})
+    assert m == 0.5 and lo <= m <= hi
+    m, lo, hi = cluster_bootstrap_diff({f"q{i}": [0.1] * 4 for i in range(50)})
+    assert abs(m - 0.1) < 1e-12 and abs(lo - 0.1) < 1e-9 and abs(hi - 0.1) < 1e-9

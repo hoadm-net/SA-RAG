@@ -39,3 +39,19 @@ def bootstrap_ci(values: list[float], samples: int = 1000, ci: float = 0.95, see
     means = v[rng.integers(0, len(v), size=(samples, len(v)))].mean(axis=1)
     lo, hi = np.quantile(means, [(1 - ci) / 2, 1 - (1 - ci) / 2])
     return float(lo), float(hi)
+
+
+def cluster_bootstrap_diff(diffs: dict[str, list[float]], samples: int = 2000, ci: float = 0.95,
+                           seed: int = 0) -> tuple[float, float, float]:
+    """Mean paired difference with a bootstrap CI that resamples questions (clusters): all values of a
+    question (e.g. one per generator) are kept together, so pooling models does not shrink the CI."""
+    keys = list(diffs)
+    if not keys:
+        return float("nan"), float("nan"), float("nan")
+    sums = np.array([sum(diffs[k]) for k in keys], dtype=float)
+    counts = np.array([len(diffs[k]) for k in keys], dtype=float)
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(keys), size=(samples, len(keys)))
+    means = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+    lo, hi = np.quantile(means, [(1 - ci) / 2, 1 - (1 - ci) / 2])
+    return float(sums.sum() / counts.sum()), float(lo), float(hi)

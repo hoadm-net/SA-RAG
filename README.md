@@ -83,7 +83,7 @@ differs downstream (packing, C4); sum of top-2 favours long articles and lowers 
   resolved within the same document, and the referenced clause or article is added (one hop).
 
 ### C4. Budget-aware packing and citation-grounded generation
-- For a token budget B in {1024, 2048, 4096}, counted with the generator's tokenizer over the whole chat-formatted
+- For a token budget B in {512, 1024, 2048, 4096}, counted with the generator's tokenizer over the whole chat-formatted
   prompt, units are added greedily in priority order, skipping any unit that would overflow, until nothing else
   fits. The budget is checked on the rendered context, so article headers and lead-ins are paid for. Duplicates are
   removed and units from the same article keep their original order.
@@ -156,7 +156,7 @@ Run on SA-RAG with B = 2048 and Qwen2.5-3B-Instruct:
 - without citation verification (C4)
 
 ### 5.3 Budget sweep
-B in {1024, 2048, 4096}, for every generator and for B1, B2 and SA-RAG.
+B in {512, 1024, 2048, 4096}, for every generator and for B1, B2 and SA-RAG.
 
 ### 5.4 Local deployment
 Generators are converted to GGUF Q4_K_M and run with llama.cpp on a commodity machine (laptop CPU or a 6-8 GB GPU).
@@ -233,13 +233,18 @@ SA-RAG/
 - [x] Structural expansion (lead-in, cross-references)
 - [x] Budget-aware packing
 - [x] Generation, citation parsing and verification
-- [ ] Main experiments, ablations, budget sweep
+- [x] Main experiments, ablations, budget sweep (B in {512, 1024, 2048, 4096})
 - [x] Bootstrap confidence intervals
-- [ ] Judge evaluation (judge model to be fixed)
-- [ ] Local llama.cpp benchmarks
-- [ ] Tables and figures
+- [x] Judge evaluation (Claude Haiku 5.5)
+- [x] Local llama.cpp benchmarks
+- [x] Tables and figures
 
-## 9. Results so far
+## 9. Results
+
+Full tables: `outputs/tables/tables.md` (built by `scripts/08_make_tables_figures.py`); Figure 1:
+`outputs/figures/figure1_budget.png`. Means over the test sets; 95% CIs by bootstrap.
+
+### 9.1 Retrieval
 
 Article-level retrieval on the test sets (hybrid retrieval, final settings; ViLegalExperts uses silver labels):
 
@@ -252,6 +257,64 @@ Article-level retrieval on the test sets (hybrid retrieval, final settings; ViLe
 
 Breadcrumbs matter most where clause text alone lacks context (ViLegalExperts full texts, +0.109 R@1) and least on
 Zalo, whose articles have no titles and whose document names are codes.
+
+Context recall (share of gold articles inside the packed context, Qwen2.5 tokenizer) is highest for SA-RAG at
+B <= 1024 on every dataset, e.g. at B = 1024: ALQAC 2025 0.927 vs 0.805 (B2), ViLegalExperts 0.739 vs 0.669 (B2).
+At B = 4096 the three systems are within 0.03 of each other.
+
+### 9.2 Answers (paired, SA-RAG minus baseline, pooled over generators, CI by bootstrap over questions)
+
+| Baseline | Data, metric | B = 512 | B = 1024 | B = 2048 | B = 4096 |
+|---|---|---|---|---|---|
+| B2 | ALQAC accuracy (4 Qwen models, 370 questions) | **+0.026** | +0.007 | -0.003 | -0.007 |
+| B2 | ViLegalExperts token F1 (5 models, 773 questions) | +0.004 | **+0.022** | **+0.017** | **+0.007** |
+| B2 | ViLegalExperts judge score, 1-5 | **+0.113** | **+0.105** | +0.024 | -0.039 |
+| B1 | ALQAC accuracy | **+0.049** | +0.002 | +0.007 | -0.009 |
+| B1 | ViLegalExperts token F1 | **+0.033** | **+0.039** | **+0.029** | **+0.025** |
+| B1 | ViLegalExperts judge score | **+0.278** | **+0.315** | **+0.165** | **+0.137** |
+
+Bold: CI excludes 0. SA-RAG helps most under tight budgets and the advantage fades at B = 4096, where all systems
+fit most of the gold evidence. ALQAC accuracy is near its ceiling once the gold article is in context. Citation
+precision and recall of SA-RAG and B2 are close (within about 0.05 either way), and both are clearly above B1.
+
+### 9.3 Ablations (Qwen2.5-3B at B = 1024 and 2048, Qwen3-1.7B and Qwen2.5-7B at B = 2048)
+
+| Variant | Accuracy, mean change | Long-form F1, mean change | Citation precision, mean change |
+|---|---|---|---|
+| without breadcrumbs (C1) | -0.025 (worse in 88% of settings) | -0.020 (100%) | -0.068 (100%) |
+| without aggregation (C2) | +0.001 | -0.004 | +0.008 |
+| without structural expansion (C3) | -0.005 | -0.003 | +0.003 |
+| without budget-aware packing (C4) | +0.003 | -0.005 | -0.003 |
+| without citation verification (C4) | +0.001 | 0.000 | -0.079 (100%) |
+
+Breadcrumbs and citation verification have consistent effects. Aggregation, structural expansion and the packing
+strategy show no effect beyond run-to-run variation: repeating identical runs with vLLM changed accuracy by at most
+one question and citation precision by up to 0.03.
+
+### 9.4 Local deployment (llama.cpp, GGUF Q4_K_M, mean per question at B = 2048)
+
+| Generator | GPU: TTFT / latency / VRAM | CPU, 8 threads: TTFT / tokens per s / latency / RAM |
+|---|---|---|
+| Sailor2-1B | 0.12 s / 0.58 s / 1.1 GB | 0.37 s / 55 / 3.7 s / 2.1 GB |
+| Qwen2.5-1.5B | 0.09 s / 0.37 s / 1.7 GB | 0.40 s / 43 / 2.9 s / 2.2 GB |
+| Qwen3-1.7B | 0.11 s / 0.42 s / 2.0 GB | 0.53 s / 33 / 4.1 s / 2.9 GB |
+| Qwen2.5-3B | 0.16 s / 0.52 s / 2.4 GB | 0.74 s / 23 / 4.5 s / 3.2 GB |
+| Qwen2.5-7B | 0.30 s / 0.85 s / 4.8 GB | 1.49 s / 11 / 9.0 s / 5.9 GB |
+
+Every generator fits a 6 GB GPU. The CPU figures come from 8 threads of a server CPU (a laptop will be slower), and
+llama.cpp reuses the KV cache of the shared system prompt, which lowers TTFT. Numbers for all budgets are in
+`outputs/metrics/local_benchmark.jsonl`.
+
+### 9.5 Caveats
+
+- Sailor2-1B does not follow the answer format on ALQAC (it answers "Đúng" to every true/false question and often
+  copies the answer placeholder on multiple choice), so it is excluded from ALQAC accuracy and kept for
+  ViLegalExperts. Its 4k context window leaves no room for an answer at B = 4096, which is not run.
+- Qwen2.5-7B runs with FP8 weights in vLLM to fit a 16 GB GPU.
+- ViLegalExperts article labels are silver (parsed from expert answers); its judge is Claude Haiku 5.5 with
+  reasoning disabled, one fixed version, temperature 0, responses cached by prompt hash.
+- Citations are re-parsed from the raw outputs at evaluation time against each run's packed context, so the
+  reported citation metrics always use the current parser.
 
 ## 10. References
 

@@ -2,7 +2,8 @@ generators:
   qwen2.5-1.5b: {hf_id: Qwen/Qwen2.5-1.5B-Instruct}
   qwen2.5-3b:   {hf_id: Qwen/Qwen2.5-3B-Instruct}
   qwen3-1.7b:   {hf_id: Qwen/Qwen3-1.7B, enable_thinking: false}
-  sailor2-1b:   {hf_id: sail/Sailor2-1B-Chat}
+  # 4k context window: B = 4096 leaves no room for the answer, so it is skipped for this model.
+  sailor2-1b:   {hf_id: sail/Sailor2-1B-Chat, max_model_len: 4096}
   # bf16 weights (15 GB) do not leave room for the KV cache on a 16 GB GPU: weights are quantised to FP8 in vLLM.
   qwen2.5-7b:   {hf_id: Qwen/Qwen2.5-7B-Instruct, upper_bound: true, engine_kwargs: {quantization: fp8}, gpu_memory_utilization: 0.92}
 

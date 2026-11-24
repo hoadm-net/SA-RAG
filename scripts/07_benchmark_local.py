@@ -103,9 +103,12 @@ def main() -> None:
         for setting in args.settings:
             kw = {"n_gpu_layers": -1} if setting == "gpu" else {"n_gpu_layers": 0, "n_threads": args.cpu_threads}
             with PeakSampler() as mem:
-                llm = Llama(model_path=str(gguf), n_ctx=max(args.budgets) + args.max_tokens + 64, verbose=False,
+                llm = Llama(model_path=str(gguf), n_ctx=min(max(args.budgets) + args.max_tokens + 64,
+                                                             gcfg.get("max_model_len", 1 << 20)), verbose=False,
                             seed=cfg["seed"], **kw)
                 for b in args.budgets:
+                    if b + args.max_tokens > gcfg.get("max_model_len", 6144):
+                        continue                                  # e.g. Sailor2 has a 4k window
                     ctx_file = resolve_path(cfg["paths"]["outputs"]) / "contexts" / args.dataset / f"sarag__{gen}__B{b}.jsonl"
                     if not ctx_file.exists():
                         print(f"[skip] {gen} B={b}: run the pack stage first ({ctx_file.name})")
